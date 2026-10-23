@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shinigami M3 (死神 M3)</title>
+    <meta name="author" content="Gomu O. Ppai">
+    <meta name="description" content="Local-first gothic pastel manga library, CBZ reader, and clipper.">
+    <meta name="theme-color" content="#fdf2f8">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Three.js for WebGL Animation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- JSZip for Local CBZ Unpacking -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        .squircle { border-radius: 24px; }
+        .squircle-lg { border-radius: 32px; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+        }
+
+        .glass-sidebar {
+            background: rgba(253, 242, 248, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(244, 114, 182, 0.2);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* --- Fullscreen Attack Zoom Intro Animation --- */
+        @keyframes ajummaAttackZoom {
+            0% {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+            70% {
+                transform: scale(4.5) translateY(15%);
+                transform-origin: 50% 40%; /* Focus zoom into cleavage/chest area */
+                opacity: 1;
+            }
+            100% {
+                transform: scale(7) translateY(25%);
+                transform-origin: 50% 40%;
+                opacity: 0;
+            }
+        }
+
+        #introStage {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: radial-gradient(circle, rgba(253,242,248,1) 0%, rgba(243,232,255,1) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            pointer-events: none;
+            transition: opacity 0.8s ease-out;
+        }
+
+        .ajumma-attacking {
+            animation: ajummaAttackZoom 2.8s cubic-bezier(0.7, 0, 0.3, 1) forwards;
+            height: 90vh;
+            object-fit: contain;
+            filter: drop-shadow(0 0 40px rgba(217, 70, 239, 0.5));
+        }
+
+        /* Ambient Breathing Animation */
+        @keyframes breathingFloat {
+            0% { transform: translateY(0px) scale(1) rotate(0deg); }
+            50% { transform: translateY(-16px) scale(1.03) rotate(0.8deg); }
+            100% { transform: translateY(0px) scale(1) rotate(0deg); }
+        }
+
+        .animated-ajumma {
+            animation: breathingFloat 6s ease-in-out infinite;
+            transform-origin: bottom center;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* --- 9 Reading Filters --- */
+        .filter-stn-positive { filter: sepia(0.95) hue-rotate(40deg) saturate(3) contrast(1.25) brightness(0.9); }
+        .filter-stn-negative { filter: invert(1) hue-rotate(180deg) sepia(0.5) saturate(2.5) brightness(0.85); }
+        .filter-eink-color { filter: contrast(1.1) saturate(0.65) brightness(1.02); }
+        .filter-eink-mono { filter: grayscale(1) contrast(1.6) brightness(1.05); }
+        .filter-newspaper { filter: sepia(0.45) contrast(0.95) brightness(0.92); }
+        .filter-nightmode { filter: invert(0.88) hue-rotate(180deg) contrast(1.1); }
+        .filter-amoled { filter: grayscale(1) invert(1) contrast(2.5) brightness(0.9); }
+        .filter-inverted { filter: invert(1); }
+        .filter-pastel { filter: saturate(0.65) hue-rotate(320deg) brightness(1.05) contrast(0.95); }
+
+        #newspaper-grain {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.18;
+            mix-blend-mode: multiply;
+            z-index: 10;
+        }
+
+        #webgl-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        #ajumma-stage {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            height: 100vh;
+            max-width: 65vw;
+            object-fit: contain;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.45;
+            filter: drop-shadow(0 0 35px rgba(217, 70, 239, 0.4));
+        }
+
+        .kanji-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 16rem;
+            font-weight: 900;
+            color: rgba(192, 132, 252, 0.08);
+            pointer-events: none;
+            user-select: none;
+            font-family: serif;
+            z-index: 0;
+        }
+
+        /* iOS Round Switches */
+        .ios-switch {
+            width: 48px;
+            height: 26px;
+            appearance: none;
+            background-color: #cbd5e1;
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            outline: none;
+        }
+        .ios-switch:checked { background-color: #a855f7; }
+        .ios-switch::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            background-color: white;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .ios-switch:checked::before { transform: translateX(22px); }
+    </style>
+</head>
+<body class="h-full bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 text-slate-800 antialiased font-sans overflow-hidden flex">
+
+    <!-- FULLSCREEN ATTACK INTRO STAGE -->
+    <div id="introStage">
+        <img id="introAjumma" src="Full Ajumma.png" class="ajumma-attacking" onerror="dismissIntroImmediately()">
+    </div>
+
+    <!-- WebGL Particle Canvas -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- Animated Breathing & Gyro Parallax Background Image -->
+    <img id="ajumma-stage" src="Full Ajumma.png" alt="Ajumma" class="animated-ajumma" onerror="this.style.display='none'">
+
+    <!-- Hidden Audio Greeting Element -->
+    <audio id="audioGreeting" src="Araarasad.mp3" preload="auto"></audio>
+
+    <!-- Collapsible Sidebar Navigation -->
+    <aside id="appSidebar" class="w-72 glass-sidebar p-5 flex flex-col justify-between z-30 relative shadow-xl">
+        <div class="kanji-watermark">死神</div>
+
+        <div class="relative z-10">
+            <!-- App Header & Avatar -->
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 squircle bg-gradient-to-tr from-pink-300 via-purple-300 to-indigo-300 p-0.5 shadow-md flex items-center justify-center shrink-0">
+                        <div class="w-full h-full bg-white squircle overflow-hidden flex items-center justify-center">
+                            <img src="chibi.png" alt="Avatar" class="w-full h-full object-cover">
+                        </div>
+                    </div>
+                    <div class="sidebar-label">
+                        <h1 class="text-lg font-extrabold bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">死神 M3</h1>
+                        <p class="text-[10px] font-semibold text-purple-400">Gothic Pastel Sanctuary</p>
+                    </div>
+                </div>
+                <button onclick="toggleSidebar()" class="p-2 text-slate-400 hover:text-purple-600 rounded-xl transition-all"><i data-lucide="panel-left-close" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="space-y-2">
+                <button onclick="switchTab('library')" id="nav-library" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md shadow-pink-200 transition-all">
+                    <i data-lucide="folder-tree" class="w-4 h-4 shrink-0"></i>
+                    <span class="sidebar-label">Explorer Shelves</span>
+                </button>
+                <button onclick="switchTab('bookmarks')" id="nav-bookmarks" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-white/60 transition-all">
+                    <i data-lucide="bookmark" class="w-4 h-4 shrink-0"></i>
+                    <span class="sidebar-label">Web Bookmarks</span>
+                </button>
+                <button onclick="switchTab('collections')" id="nav-collections" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-white/60 transition-all">
+                    <i data-lucide="scissors" class="w-4 h-4 shrink-0"></i>
+                    <span class="sidebar-label">Clippings & Notes</span>
+                </button>
+                <button onclick="switchTab('settings')" id="nav-settings" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-white/60 transition-all">
+                    <i data-lucide="settings" class="w-4 h-4 shrink-0"></i>
+                    <span class="sidebar-label">Settings & Toggles</span>
+                </button>
+            </nav>
+        </div>
+
+        <div class="relative z-10 pt-4 border-t border-purple-100 sidebar-label">
+            <button onclick="openModal('modalAbout')" class="w-full text-center text-xs font-medium text-slate-400 hover:text-purple-600 transition-colors">
+                Shinigami M3 v3.6 • Credits
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Stage Content -->
+    <main class="flex-1 flex flex-col z-20 relative overflow-hidden">
+
+        <!-- TAB 1: WINDOWS EXPLORER-STYLE HIERARCHICAL SHELVES -->
+        <section id="tab-library" class="flex-1 flex flex-col p-6 overflow-y-auto space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-2xl font-black bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Hierarchical Manga Explorer</h2>
+                    <p class="text-xs font-semibold text-slate-400">Add volumes, sort numerically/alphabetically, or browse folders via 3rd-party file managers.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <!-- File input accepting raw MIME types so Android lets you choose ZArchiver / Solid Explorer -->
+                    <label class="px-4 py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer hover:opacity-90 transition-all flex items-center gap-1.5">
+                        <i data-lucide="file-up" class="w-4 h-4"></i> Add CBZ / ZIP
+                        <input type="file" id="cbzInput" accept=".cbz,.cbr,.zip,application/x-cbz,application/zip" onchange="loadCBZFile(event)" class="hidden">
+                    </label>
+                    <label class="px-4 py-2.5 bg-white text-purple-700 text-xs font-bold rounded-xl border border-purple-200 shadow-sm cursor-pointer hover:bg-purple-50 transition-all flex items-center gap-1.5">
+                        <i data-lucide="folder-open" class="w-4 h-4"></i> Browse Image Folder
+                        <input type="file" id="folderInput" webkitdirectory directory multiple accept="image/*" onchange="loadFolderFiles(event)" class="hidden">
+                    </label>
+                    <button onclick="createHierarchyFolder()" class="px-3 py-2.5 bg-purple-100 text-purple-700 text-xs font-bold rounded-xl hover:bg-purple-200 transition-all flex items-center gap-1">
+                        <i data-lucide="folder-plus" class="w-4 h-4"></i> New Collection Group
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hierarchy Tree Stage -->
+            <div id="explorerTreeContainer" class="glass-panel p-6 rounded-3xl space-y-4">
+                <!-- Tree items render dynamically -->
+            </div>
+        </section>
+
+        <!-- TAB 2: WEB BOOKMARKS REGISTRY -->
+        <section id="tab-bookmarks" class="hidden flex-1 p-6 overflow-y-auto space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800">Manga Site Bookmarks</h2>
+                    <p class="text-xs font-semibold text-slate-400">Saved site links, series homepages, and chapter bookmarks.</p>
+                </div>
+                <button onclick="addBookmarkPrompt()" class="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Add Bookmark
+                </button>
+            </div>
+
+            <div id="bookmarksGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Bookmarks render dynamically -->
+            </div>
+        </section>
+
+        <!-- TAB 3: CLIPBOARD COLLECTIONS & NOTES -->
+        <section id="tab-collections" class="hidden flex-1 p-6 overflow-y-auto space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800">Clippings & Annotations</h2>
+                    <p class="text-xs font-semibold text-slate-400">3-finger screenshot clips and tagged manga notes.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="captureClipboard()" class="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 hover:opacity-90">
+                        <i data-lucide="clipboard-paste" class="w-4 h-4"></i> Paste Clip
+                    </button>
+                    <button onclick="openNoteModal()" class="px-4 py-2 bg-purple-100 text-purple-700 text-xs font-bold rounded-xl flex items-center gap-1.5 hover:bg-purple-200">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> Add Note
+                    </button>
+                </div>
+            </div>
+
+            <div id="collectionsContainer" class="space-y-4"></div>
+
+            <div class="space-y-3 pt-4">
+                <h3 class="text-base font-bold text-slate-700">Saved Notes</h3>
+                <div id="notesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+        </section>
+
+        <!-- TAB 4: SETTINGS & ROUND TOGGLES -->
+        <section id="tab-settings" class="hidden flex-1 p-6 overflow-y-auto space-y-6">
+            <h2 class="text-2xl font-black text-slate-800">Settings & Feature Toggles</h2>
+
+            <div class="glass-panel p-6 rounded-3xl space-y-5 border border-white shadow-md max-w-2xl">
+                <h3 class="text-xs font-black text-purple-500 uppercase tracking-wider">Granular Controls</h3>
+
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-3.5 bg-white/80 rounded-2xl shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 squircle bg-pink-100 text-pink-600 flex items-center justify-center font-bold"><i data-lucide="volume-2" class="w-5 h-5"></i></div>
+                            <span class="text-xs font-bold text-slate-700">Ara-Ara Startup Voice Greeting</span>
+                        </div>
+                        <input type="checkbox" id="toggleVoice" checked class="ios-switch">
+                    </div>
+
+                    <div class="flex items-center justify-between p-3.5 bg-white/80 rounded-2xl shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 squircle bg-purple-100 text-purple-600 flex items-center justify-center font-bold"><i data-lucide="sparkles" class="w-5 h-5"></i></div>
+                            <span class="text-xs font-bold text-slate-700">WebGL Floating Particles</span>
+                        </div>
+                        <input type="checkbox" id="toggleWebGL" checked onchange="toggleWebGLParticles(this.checked)" class="ios-switch">
+                    </div>
+
+                    <div class="flex items-center justify-between p-3.5 bg-white/80 rounded-2xl shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 squircle bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold"><i data-lucide="compass" class="w-5 h-5"></i></div>
+                            <span class="text-xs font-bold text-slate-700">Gyroscope & Mouse Parallax Effect</span>
+                        </div>
+                        <input type="checkbox" id="toggleGyro" checked class="ios-switch">
+                    </div>
+
+                    <div class="flex items-center justify-between p-3.5 bg-white/80 rounded-2xl shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 squircle bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold"><i data-lucide="maximize" class="w-5 h-5"></i></div>
+                            <span class="text-xs font-bold text-slate-700">Ajumma Stage Display Mode</span>
+                        </div>
+                        <select id="ajummaFitMode" onchange="updateAjummaFit(this.value)" class="bg-purple-100 text-purple-800 text-xs font-bold rounded-xl px-3 py-1.5 outline-none">
+                            <option value="width">Auto Fit Width</option>
+                            <option value="height">Auto Fit Height</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- READER STAGE VIEW (With All 9 Color Filters Restored) -->
+        <div id="readerView" class="hidden absolute inset-0 bg-slate-900 z-40 flex flex-col">
+            <div class="h-14 bg-slate-900/90 backdrop-blur-md px-4 flex items-center justify-between text-white border-b border-slate-800 shrink-0">
+                <div class="flex items-center gap-3">
+                    <button onclick="closeReader()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5"><i data-lucide="arrow-left" class="w-4 h-4"></i> Exit Reader</button>
+                    <span id="activeReaderTitle" class="font-bold text-xs truncate max-w-xs text-purple-300">Reading Volume</span>
+                </div>
+                
+                <!-- Complete Restored 9 Reading Color Filters -->
+                <div class="flex items-center gap-2">
+                    <select id="readerFilterSelect" onchange="setReaderFilter(this.value)" class="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-xl px-3 py-1.5 outline-none">
+                        <option value="none">Normal Color</option>
+                        <option value="filter-stn-positive">LCD - STN Positive (Yellow-Green)</option>
+                        <option value="filter-stn-negative">LCD - STN Negative Blue</option>
+                        <option value="filter-eink-color">E-INK Colored</option>
+                        <option value="filter-eink-mono">E-Ink Monochrome</option>
+                        <option value="filter-newspaper">News Paper (Textured Grain)</option>
+                        <option value="filter-nightmode">Nightmode</option>
+                        <option value="filter-amoled">Powersaving (Black AMOLED)</option>
+                        <option value="filter-inverted">Fullcolour Inverted</option>
+                        <option value="filter-pastel">Pastel Theme</option>
+                    </select>
+
+                    <button onclick="exportCurrentToCBZ()" class="px-3 py-1.5 bg-gradient-to-r from-pink-500 to-purple-600 rounded-xl text-white text-xs font-bold flex items-center gap-1"><i data-lucide="download" class="w-4 h-4"></i> Export CBZ</button>
+                </div>
+            </div>
+
+            <div id="readerStageContainer" class="flex-1 relative overflow-y-auto p-4 flex flex-col items-center">
+                <!-- SVG Texture Grain for Newspaper Filter -->
+                <svg id="newspaper-grain" class="hidden">
+                    <filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/></filter>
+                    <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
+                </svg>
+                <div id="readerPageContainer" class="max-w-3xl w-full flex flex-col items-center gap-4"></div>
+            </div>
+
+            <!-- Page Thumbnail Preview Scrubber Bar -->
+            <div id="scrubberBar" class="h-20 glass-panel border-t border-slate-800 bg-slate-900/90 p-2 flex items-center gap-2 overflow-x-auto shrink-0 z-50"></div>
+        </div>
+
+    </main>
+
+    <!-- MODAL: NOTE CREATION -->
+    <div id="modalNote" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-white relative">
+            <h3 class="text-lg font-bold text-slate-800">New Manga Note</h3>
+            <input type="text" id="noteTitle" placeholder="Manga Title / Chapter" class="w-full bg-white/80 rounded-xl px-3 py-2 text-xs font-bold border border-purple-200 outline-none">
+            <textarea id="noteContent" placeholder="Write annotations or thoughts..." rows="4" class="w-full bg-white/80 rounded-xl p-3 text-xs border border-purple-200 outline-none"></textarea>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('modalNote')" class="px-4 py-2 bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancel</button>
+                <button onclick="saveNote()" class="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl">Save Note</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ABOUT -->
+    <div id="modalAbout" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl border border-white text-center relative">
+            <button onclick="closeModal('modalAbout')" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <div class="w-16 h-16 squircle bg-gradient-to-tr from-pink-300 to-purple-300 p-0.5 mx-auto">
+                <div class="w-full h-full bg-white squircle overflow-hidden">
+                    <img src="chibi.png" alt="Avatar" class="w-full h-full object-cover">
+                </div>
+            </div>
+            <div>
+                <h3 class="text-lg font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Shinigami M3</h3>
+                <p class="text-xs font-semibold text-slate-400 mt-0.5">Local-First Gothic Pastel Sanctuary</p>
+            </div>
+            <div class="p-3 bg-purple-100/60 rounded-2xl border border-purple-200 text-xs font-bold text-purple-700">Created with ❤️ by Gomu O. Ppai</div>
+        </div>
+    </div>
+
+    <script>
+        let hierarchyGroups = [];
+        let bookmarks = [];
+        let collections = {};
+        let notes = [];
+        let currentPages = [];
+        let particleSystem, scene, camera, renderer;
+        let sidebarCollapsed = false;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initWebGL();
+            initParallax();
+            startAttackIntro();
+            loadLocalStorage();
+            renderExplorerTree();
+            renderBookmarks();
+            renderCollections();
+            renderNotes();
+        });
+
+        /* --- Fullscreen Attack Intro Sequence --- */
+        function startAttackIntro() {
+            const audio = document.getElementById('audioGreeting');
+            if(document.getElementById('toggleVoice').checked) {
+                audio.play().catch(() => {});
+            }
+
+            setTimeout(() => {
+                const stage = document.getElementById('introStage');
+                if(stage) {
+                    stage.style.opacity = '0';
+                    setTimeout(() => stage.remove(), 800);
+                }
+            }, 2600);
+        }
+
+        function dismissIntroImmediately() {
+            const stage = document.getElementById('introStage');
+            if(stage) stage.remove();
+        }
+
+        function toggleSidebar() {
+            sidebarCollapsed = !sidebarCollapsed;
+            const sidebar = document.getElementById('appSidebar');
+            const labels = document.querySelectorAll('.sidebar-label');
+            if(sidebarCollapsed) {
+                sidebar.style.width = '84px';
+                labels.forEach(l => l.style.display = 'none');
+            } else {
+                sidebar.style.width = '288px';
+                labels.forEach(l => l.style.display = 'block');
+            }
+        }
+
+        function updateAjummaFit(mode) {
+            const stage = document.getElementById('ajumma-stage');
+            if(mode === 'width') {
+                stage.style.maxWidth = '100vw';
+                stage.style.maxHeight = 'none';
+            } else {
+                stage.style.maxHeight = '100vh';
+                stage.style.maxWidth = 'none';
+            }
+        }
+
+        /* --- Windows Explorer-Style Hierarchy & Local Unpacker --- */
+        async function loadCBZFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const zip = new JSZip();
+            const zipContent = await zip.loadAsync(file);
+            let pages = [];
+
+            const imageFiles = Object.keys(zipContent.files).filter(filename => 
+                /\.(jpg|jpeg|png|webp|gif)$/i.test(filename)
+            ).sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+
+            for (let filename of imageFiles) {
+                const blob = await zipContent.files[filename].async('blob');
+                pages.push(URL.createObjectURL(blob));
+            }
+
+            addVolumeToHierarchy(file.name, 'CBZ', pages);
+            openReader(file.name, pages);
+        }
+
+        async function loadFolderFiles(event) {
+            const files = Array.from(event.target.files).filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name));
+            if (files.length === 0) return;
+
+            files.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
+            let pages = files.map(f => URL.createObjectURL(f));
+            let folderName = files[0].webkitRelativePath.split('/')[0] || "Local Image Folder";
+
+            addVolumeToHierarchy(folderName, 'FOLDER', pages);
+            openReader(folderName, pages);
+        }
+
+        function createHierarchyFolder() {
+            const name = prompt("Enter Collection/Manga Title:", "My Series");
+            if(!name) return;
+            hierarchyGroups.push({ id: Date.now(), title: name, volumes: [] });
+            saveLocalStorage();
+            renderExplorerTree();
+        }
+
+        function addVolumeToHierarchy(title, type, pages) {
+            if(hierarchyGroups.length === 0) {
+                hierarchyGroups.push({ id: Date.now(), title: "Uncategorized Manga", volumes: [] });
+            }
+            hierarchyGroups[0].volumes.unshift({ id: Date.now(), title: title, type: type, pages: pages, cover: pages[0] || '' });
+            saveLocalStorage();
+            renderExplorerTree();
+        }
+
+        function renderExplorerTree() {
+            const container = document.getElementById('explorerTreeContainer');
+            if (hierarchyGroups.length === 0) {
+                container.innerHTML = `<div class="py-8 text-center text-slate-400 font-semibold text-xs">No manga added yet. Click "Add CBZ/ZIP" or "Browse Image Folder" above!</div>`;
+                return;
+            }
+
+            container.innerHTML = hierarchyGroups.map((group, gIdx) => `
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between bg-purple-100/60 p-3 rounded-2xl border border-purple-200">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="folder" class="w-4 h-4 text-purple-600"></i>
+                            <span class="font-black text-slate-800 text-xs">${group.title}</span>
+                        </div>
+                        <button onclick="deleteGroup(${gIdx})" class="text-slate-300 hover:text-red-500 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                    </div>
+
+                    <div class="pl-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        ${group.volumes.map((v, vIdx) => `
+                            <div class="glass-panel p-3 rounded-2xl space-y-2 relative group hover:shadow-md transition-all cursor-pointer" onclick="openReader('${v.title}', hierarchyGroups[${gIdx}].volumes[${vIdx}].pages)">
+                                <div class="w-full h-36 rounded-xl overflow-hidden bg-slate-200 relative">
+                                    <img src="${v.cover}" class="w-full h-full object-cover">
+                                    <span class="absolute top-2 right-2 px-2 py-0.5 bg-slate-900/80 text-white text-[9px] font-black rounded-lg uppercase">${v.type}</span>
+                                </div>
+                                <h4 class="font-bold text-slate-800 text-xs truncate">${v.title}</h4>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function deleteGroup(idx) {
+            hierarchyGroups.splice(idx, 1);
+            saveLocalStorage();
+            renderExplorerTree();
+        }
+
+        /* --- Web Bookmarks --- */
+        function addBookmarkPrompt() {
+            const title = prompt("Enter Manga/Site Title:", "Manga Site");
+            if (!title) return;
+            const url = prompt("Enter URL:", "https://");
+            if (!url) return;
+
+            bookmarks.unshift({ id: Date.now(), title: title, url: url });
+            saveLocalStorage();
+            renderBookmarks();
+        }
+
+        function renderBookmarks() {
+            const grid = document.getElementById('bookmarksGrid');
+            if (bookmarks.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-8 text-center text-slate-400 font-semibold text-xs">No website bookmarks saved yet.</div>`;
+                return;
+            }
+
+            grid.innerHTML = bookmarks.map((b, idx) => `
+                <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border border-white">
+                    <div>
+                        <h4 class="font-bold text-slate-800 text-xs">${b.title}</h4>
+                        <a href="${b.url}" target="_blank" class="text-[10px] text-purple-600 hover:underline truncate block max-w-[180px]">${b.url}</a>
+                    </div>
+                    <button onclick="deleteBookmark(${idx})" class="text-slate-300 hover:text-red-500 p-1"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function deleteBookmark(idx) {
+            bookmarks.splice(idx, 1);
+            saveLocalStorage();
+            renderBookmarks();
+        }
+
+        /* --- Reader Engine --- */
+        function openReader(title, pages) {
+            currentPages = pages;
+            document.getElementById('activeReaderTitle').innerText = title;
+            const container = document.getElementById('readerPageContainer');
+            const scrubber = document.getElementById('scrubberBar');
+            container.innerHTML = '';
+            scrubber.innerHTML = '';
+
+            pages.forEach((url, i) => {
+                const img = document.createElement('img');
+                img.src = url;
+                img.id = `rpage-${i}`;
+                img.className = "w-full rounded-2xl shadow-xl border border-slate-800";
+                container.appendChild(img);
+
+                const thumb = document.createElement('img');
+                thumb.src = url;
+                thumb.className = "h-16 w-12 object-cover rounded-xl border border-slate-700 cursor-pointer hover:scale-105 shrink-0 transition-all";
+                thumb.onclick = () => document.getElementById(`rpage-${i}`).scrollIntoView({ behavior: 'smooth' });
+                scrubber.appendChild(thumb);
+            });
+
+            document.getElementById('readerView').classList.remove('hidden');
+        }
+
+        function closeReader() {
+            document.getElementById('readerView').classList.add('hidden');
+        }
+
+        function setReaderFilter(filterClass) {
+            const container = document.getElementById('readerPageContainer');
+            const grain = document.getElementById('newspaper-grain');
+            container.className = `max-w-3xl w-full flex flex-col items-center gap-4 transition-all ${filterClass}`;
+            if (filterClass === 'filter-newspaper') grain.classList.remove('hidden');
+            else grain.classList.add('hidden');
+        }
+
+        async function exportCurrentToCBZ() {
+            if (currentPages.length === 0) return;
+            const zip = new JSZip();
+            for (let i = 0; i < currentPages.length; i++) {
+                const response = await fetch(currentPages[i]);
+                const blob = await response.blob();
+                zip.file(`page_${String(i+1).padStart(3, '0')}.jpg`, blob);
+            }
+            const content = await zip.generateAsync({ type: "blob" });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(content);
+            a.download = "manga_export.cbz";
+            a.click();
+        }
+
+        /* --- Clipboard Collections & Notes --- */
+        async function captureClipboard() {
+            try {
+                const items = await navigator.clipboard.read();
+                for (const item of items) {
+                    for (const type of item.types) {
+                        if (type.startsWith('image/')) {
+                            const blob = await item.getType(type);
+                            saveClipping(URL.createObjectURL(blob));
+                            return;
+                        }
+                    }
+                }
+                alert("No image found in clipboard.");
+            } catch (err) {
+                saveClipping('chibi.png');
+            }
+        }
+
+        function saveClipping(imgUrl) {
+            const manga = prompt("Enter Manga Title for this clipping:", "General Clips");
+            if (!manga) return;
+            if (!collections[manga]) collections[manga] = [];
+            collections[manga].push({ img: imgUrl, date: new Date().toLocaleDateString() });
+            renderCollections();
+        }
+
+        function renderCollections() {
+            const container = document.getElementById('collectionsContainer');
+            if (Object.keys(collections).length === 0) {
+                container.innerHTML = `<div class="glass-panel p-6 rounded-3xl text-center text-slate-400 text-xs font-medium">No clippings saved yet.</div>`;
+                return;
+            }
+            container.innerHTML = Object.keys(collections).map(manga => `
+                <div class="glass-panel p-5 rounded-3xl space-y-3">
+                    <h3 class="font-bold text-slate-800 text-sm">${manga}</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        ${collections[manga].map(c => `<div class="rounded-2xl overflow-hidden shadow-sm border border-white"><img src="${c.img}" class="w-full h-32 object-cover"></div>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openNoteModal() { openModal('modalNote'); }
+        function saveNote() {
+            const title = document.getElementById('noteTitle').value;
+            const content = document.getElementById('noteContent').value;
+            if(!title || !content) return;
+            notes.push({ title, content, date: new Date().toLocaleDateString() });
+            closeModal('modalNote');
+            renderNotes();
+        }
+
+        function renderNotes() {
+            const container = document.getElementById('notesContainer');
+            if(notes.length === 0) return;
+            container.innerHTML = notes.map(n => `
+                <div class="glass-panel p-4 rounded-2xl space-y-1">
+                    <h4 class="font-bold text-slate-800 text-xs">${n.title}</h4>
+                    <p class="text-xs text-slate-600">${n.content}</p>
+                    <span class="text-[10px] text-slate-400 block pt-1">${n.date}</span>
+                </div>
+            `).join('');
+        }
+
+        /* --- WebGL & Parallax --- */
+        function initWebGL() {
+            const canvas = document.getElementById('webgl-canvas');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(100 * 3);
+            for (let i = 0; i < 300; i++) positions[i] = (Math.random() - 0.5) * 15;
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleSystem = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.12, color: 0xd946ef, transparent: true, opacity: 0.5 }));
+            scene.add(particleSystem);
+            camera.position.z = 5;
+
+            function animate() {
+                requestAnimationFrame(animate);
+                if (particleSystem) particleSystem.rotation.y += 0.001;
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function toggleWebGLParticles(enable) { if (particleSystem) particleSystem.visible = enable; }
+
+        function initParallax() {
+            const stage = document.getElementById('ajumma-stage');
+            window.addEventListener('mousemove', (e) => {
+                if (!document.getElementById('toggleGyro').checked) return;
+                const x = (e.clientX / window.innerWidth - 0.5) * 20;
+                const y = (e.clientY / window.innerHeight - 0.5) * 20;
+                stage.style.transform = `translate(${x}px, ${y}px)`;
+            });
+        }
+
+        function switchTab(tab) {
+            ['library', 'bookmarks', 'collections', 'settings'].forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                const nav = document.getElementById(`nav-${t}`);
+                if (t === tab) {
+                    el.classList.remove('hidden');
+                    nav.className = "w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md shadow-pink-200 transition-all";
+                } else {
+                    el.classList.add('hidden');
+                    nav.className = "w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold text-slate-600 hover:bg-white/60 transition-all";
+                }
+            });
+        }
+
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function saveLocalStorage() {
+            localStorage.setItem('shinigami_groups', JSON.stringify(hierarchyGroups));
+            localStorage.setItem('shinigami_bookmarks', JSON.stringify(bookmarks));
+        }
+
+        function loadLocalStorage() {
+            const g = localStorage.getItem('shinigami_groups');
+            const b = localStorage.getItem('shinigami_bookmarks');
+            if (g) { try { hierarchyGroups = JSON.parse(g); } catch(e){} }
+            if (b) { try { bookmarks = JSON.parse(b); } catch(e){} }
+        }
+    </script>
+</body>
+</html>
