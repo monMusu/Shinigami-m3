@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shinigami M3 (死神 M3)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- JSZip for CBZ Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Google Fonts: Inter & Noto Serif JP -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif+JP:wght@700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        pastel: {
+                            bg: '#f8fafc',
+                            card: '#ffffff',
+                            sidebar: '#f1f5f9',
+                            accent: '#8b5cf6',
+                            pink: '#f472b6',
+                            mint: '#34d399',
+                            sky: '#38bdf8',
+                            lavender: '#c084fc',
+                            border: '#e2e8f0',
+                            darkBg: '#0f172a',
+                            darkCard: '#1e293b',
+                            darkSidebar: '#0f172a'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        kanji: ['Noto Serif JP', 'serif']
+                    },
+                    borderRadius: {
+                        'squircle': '24px'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(139, 92, 246, 0.5);
+        }
+
+        /* Glassmorphism Elements */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .dark .glass-panel {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Watermark Kanji Background */
+        .kanji-watermark {
+            font-family: 'Noto Serif JP', serif;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11rem;
+            color: rgba(139, 92, 246, 0.08);
+            writing-mode: vertical-rl;
+            pointer-events: none;
+            user-select: none;
+            z-index: 0;
+        }
+        .dark .kanji-watermark {
+            color: rgba(192, 132, 252, 0.06);
+        }
+
+        /* Floating Widget Glow & Pulse */
+        @keyframes subtle-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.4); }
+            50% { transform: scale(1.03); box-shadow: 0 15px 30px -5px rgba(139, 92, 246, 0.6); }
+        }
+        .shinigami-widget-btn {
+            animation: subtle-pulse 3s infinite ease-in-out;
+        }
+
+        /* Responsive Canvas / Frame Container */
+        .browser-frame-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-800 dark:text-slate-100 font-sans h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- MAIN WRAPPER -->
+    <div id="app" class="flex h-full w-full relative">
+
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="w-72 bg-slate-100 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between z-20 transition-all duration-300 relative overflow-hidden flex-shrink-0">
+            <!-- Central Kanji Watermark (死神) -->
+            <div class="kanji-watermark">死神</div>
+
+            <div class="relative z-10 p-5 flex flex-col h-full">
+                <!-- Header / Chibi Avatar Profile -->
+                <div class="flex flex-col items-center mb-6 pt-2 text-center">
+                    <div class="relative group cursor-pointer mb-3">
+                        <div class="w-24 h-24 rounded-squircle bg-gradient-to-tr from-purple-400 via-pink-400 to-sky-300 p-1 shadow-lg shadow-purple-500/20 transition-transform duration-300 group-hover:scale-105">
+                            <img id="chibiAvatar" src="chibi.png" onerror="this.src='https://placehold.co/200x200/c084fc/ffffff?text=死神'" alt="Shinigami Chibi" class="w-full h-full object-cover rounded-[20px] bg-slate-800">
+                        </div>
+                        <span class="absolute bottom-0 right-0 w-4 h-4 bg-emerald-400 border-2 border-white dark:border-slate-900 rounded-full" title="Proxy Service Ready"></span>
+                    </div>
+                    <h1 class="font-bold text-xl tracking-tight bg-gradient-to-r from-purple-600 via-pink-500 to-sky-500 bg-clip-text text-transparent">Shinigami M3</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manga & Manhwa Proxy Browser</p>
+                </div>
+
+                <!-- Navigation Menu -->
+                <nav class="space-y-1.5 flex-1 overflow-y-auto pr-1">
+                    <button onclick="switchTab('browser')" id="nav-browser" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 shadow-sm border border-purple-200/50 dark:border-purple-800/50">
+                        <i class="fa-solid font-bold fa-compass text-lg"></i>
+                        <span>Live Browser</span>
+                        <span class="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200 font-bold">Web</span>
+                    </button>
+
+                    <button onclick="switchTab('library')" id="nav-library" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition-all">
+                        <i class="fa-solid fa-book-bookmark text-lg"></i>
+                        <span>Bookmarked Series</span>
+                        <span id="series-count-badge" class="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">0</span>
+                    </button>
+
+                    <button onclick="switchTab('chapters')" id="nav-chapters" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition-all">
+                        <i class="fa-solid fa-layer-group text-lg"></i>
+                        <span>Chapter History</span>
+                        <span id="chapter-count-badge" class="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">0</span>
+                    </button>
+
+                    <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition-all">
+                        <i class="fa-solid fa-sliders text-lg"></i>
+                        <span>Backup & Settings</span>
+                    </button>
+                </nav>
+
+                <!-- Quick Presets for Popular Manga/Manhwa Hubs -->
+                <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800/80">
+                    <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">Quick Manga Hubs</span>
+                    <div class="grid grid-cols-2 gap-1.5 mt-2">
+                        <button onclick="navigateTo('https://mangapark.net')" class="text-xs py-1.5 px-2.5 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-left font-medium transition-colors truncate">
+                            <i class="fa-solid fa-globe mr-1 text-purple-400"></i> MangaPark
+                        </button>
+                        <button onclick="navigateTo('https://asuracomics.com')" class="text-xs py-1.5 px-2.5 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-left font-medium transition-colors truncate">
+                            <i class="fa-solid fa-bolt mr-1 text-amber-400"></i> Asura Scans
+                        </button>
+                        <button onclick="navigateTo('https://mangadex.org')" class="text-xs py-1.5 px-2.5 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-left font-medium transition-colors truncate">
+                            <i class="fa-solid fa-cat mr-1 text-pink-400"></i> MangaDex
+                        </button>
+                        <button onclick="navigateTo('https://manganato.com')" class="text-xs py-1.5 px-2.5 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-left font-medium transition-colors truncate">
+                            <i class="fa-solid fa-book-open mr-1 text-sky-400"></i> Manganato
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Footer System Information -->
+                <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <div class="flex items-center gap-2">
+                        <button onclick="toggleDarkMode()" class="p-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:text-purple-500 transition-colors">
+                            <i class="fa-solid fa-moon dark:hidden"></i>
+                            <i class="fa-solid fa-sun hidden dark:block text-amber-400"></i>
+                        </button>
+                        <span class="text-[11px]">Local-First PWA</span>
+                    </div>
+                    <span class="text-[10px] font-mono opacity-60">v3.4 PROXY</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 flex flex-col bg-slate-900 relative overflow-hidden h-full">
+
+            <!-- TAB 1: LIVE EMBEDDED BROWSER HUB -->
+            <section id="tab-browser" class="tab-content flex-1 flex flex-col h-full relative">
+                
+                <!-- Navigation Bar Header -->
+                <header class="p-3 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 flex items-center gap-2 z-20">
+                    <div class="flex items-center gap-1">
+                        <button onclick="browserBack()" class="p-2 rounded-xl hover:bg-slate-800 text-slate-300 transition-colors" title="Back">
+                            <i class="fa-solid fa-chevron-left text-sm"></i>
+                        </button>
+                        <button onclick="browserForward()" class="p-2 rounded-xl hover:bg-slate-800 text-slate-300 transition-colors" title="Forward">
+                            <i class="fa-solid fa-chevron-right text-sm"></i>
+                        </button>
+                        <button onclick="browserReload()" class="p-2 rounded-xl hover:bg-slate-800 text-slate-300 transition-colors" title="Refresh">
+                            <i class="fa-solid fa-rotate-right text-sm"></i>
+                        </button>
+                    </div>
+
+                    <!-- URL & Search Address Bar -->
+                    <form onsubmit="handleUrlSubmit(event)" class="flex-1 flex items-center bg-slate-800/90 border border-slate-700/80 rounded-2xl px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-purple-500 transition-all">
+                        <i id="ssl-icon" class="fa-solid fa-lock text-emerald-400 text-xs mr-2"></i>
+                        <input id="urlInput" type="text" placeholder="Search Google, MangaPark or enter URL..." value="https://google.com/search?q=one+piece+manga" class="w-full bg-transparent text-sm text-slate-100 placeholder-slate-400 focus:outline-none">
+                        <button type="submit" class="ml-2 text-slate-400 hover:text-purple-400 transition-colors">
+                            <i class="fa-solid fa-arrow-right text-sm"></i>
+                        </button>
+                    </form>
+
+                    <!-- Proxy Mode Selector -->
+                    <div class="flex items-center gap-2">
+                        <select id="proxyMode" onchange="updateProxyMode()" class="bg-slate-800 text-slate-200 text-xs rounded-xl px-2.5 py-2 border border-slate-700 focus:outline-none">
+                            <option value="direct">Direct Web / Standard</option>
+                            <option value="corsProxy" selected>CORS Proxy Bypass</option>
+                        </select>
+                        
+                        <button onclick="openExternalBrowser()" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors" title="Open in New Tab">
+                            <i class="fa-solid fa-up-right-from-square text-xs"></i>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Embedded Browser Window / Proxy View -->
+                <div class="browser-frame-wrapper flex-1 bg-slate-900 relative">
+                    
+                    <!-- Loading Bar -->
+                    <div id="browser-loader" class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-sky-400 animate-pulse z-30 hidden"></div>
+
+                    <!-- Embedded IFrame -->
+                    <iframe id="browserIframe" src="about:blank" class="w-full h-full border-0 bg-white" sandbox="allow-same-origin allow-scripts allow-popups allow-forms" onload="onIframeLoaded()"></iframe>
+
+                    <!-- FLOATING SHINIGAMI ACTION WIDGET -->
+                    <div id="floating-widget" class="absolute bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+                        
+                        <!-- Collapsible Widget Menu -->
+                        <div id="widget-menu" class="hidden flex flex-col gap-2 mb-2 p-3 rounded-2xl glass-panel shadow-2xl border border-purple-500/30 transition-all duration-300 scale-95 opacity-0 transform origin-bottom-right">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-300 px-2">Shinigami Actions</span>
+                            
+                            <button onclick="promptBookmarkSeries()" class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-md transition-all">
+                                <i class="fa-solid fa-bookmark text-sm"></i>
+                                <span>Bookmark Series Homepage</span>
+                            </button>
+
+                            <button onclick="promptBookmarkChapter()" class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-semibold shadow-md transition-all">
+                                <i class="fa-solid fa-file-circle-plus text-sm"></i>
+                                <span>Bookmark Current Chapter</span>
+                            </button>
+
+                            <button onclick="extractPageImages()" class="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-md transition-all">
+                                <i class="fa-solid fa-eye text-sm"></i>
+                                <span>Extract & Read Strip View</span>
+                            </button>
+                        </div>
+
+                        <!-- Main Floating Toggle Icon -->
+                        <button onclick="toggleWidgetMenu()" class="shinigami-widget-btn w-14 h-14 rounded-full bg-gradient-to-r from-purple-600 to-pink-500 text-white flex items-center justify-center shadow-xl border-2 border-white/40 cursor-pointer hover:scale-105 transition-all">
+                            <i class="fa-solid fa-wand-magic-sparkles text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: BOOKMARKED SERIES GRID LIBRARY -->
+            <section id="tab-library" class="tab-content flex-1 flex-col p-6 overflow-y-auto hidden">
+                <div class="max-w-6xl mx-auto w-full">
+                    
+                    <!-- Search & Filter Controls -->
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight text-slate-100">My Manga & Manhwa Series</h2>
+                            <p class="text-sm text-slate-400">All local bookmarks saved directly on your device</p>
+                        </div>
+                        
+                        <div class="flex items-center gap-3">
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+                                <input id="librarySearchInput" oninput="renderLibrary()" type="text" placeholder="Search series or tags..." class="pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-2xl text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            </div>
+                            <button onclick="promptBookmarkSeries()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-sm font-semibold transition-all shadow-md flex items-center gap-2">
+                                <i class="fa-solid fa-plus"></i> Add Manual
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Series Card Grid -->
+                    <div id="seriesGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
+                        <!-- Populated by JavaScript -->
+                    </div>
+
+                    <!-- Empty State Placeholder -->
+                    <div id="libraryEmptyState" class="hidden flex flex-col items-center justify-center py-20 text-center">
+                        <div class="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 mb-4">
+                            <i class="fa-solid fa-book-open text-3xl"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-300">No Bookmarked Manga Yet</h3>
+                        <p class="text-sm text-slate-500 max-w-sm mt-1 mb-4">Use the Live Browser tab to find your favorite series on MangaPark or AsuraScans and tap the Floating Shinigami Widget to bookmark them!</p>
+                        <button onclick="switchTab('browser')" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-sm font-semibold shadow-md transition-all">
+                            Open Live Browser
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: CHAPTER HISTORY LOG -->
+            <section id="tab-chapters" class="tab-content flex-1 flex-col p-6 overflow-y-auto hidden">
+                <div class="max-w-5xl mx-auto w-full">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight text-slate-100">Chapter Reading Log</h2>
+                            <p class="text-sm text-slate-400">All saved chapter bookmarks and progress</p>
+                        </div>
+                        <button onclick="clearChapterHistory()" class="px-3.5 py-2 bg-rose-900/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 rounded-2xl text-xs font-semibold transition-all">
+                            Clear Log
+                        </button>
+                    </div>
+
+                    <div class="bg-slate-800/60 border border-slate-700/60 rounded-squircle overflow-hidden shadow-xl">
+                        <table class="w-full text-left text-sm text-slate-300">
+                            <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 font-semibold border-b border-slate-700">
+                                <tr>
+                                    <th class="py-3.5 px-4">Series Title</th>
+                                    <th class="py-3.5 px-4">Chapter</th>
+                                    <th class="py-3.5 px-4">Date Saved</th>
+                                    <th class="py-3.5 px-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="chapterTableBody" class="divide-y divide-slate-700/50">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: BACKUP & SETTINGS -->
+            <section id="tab-settings" class="tab-content flex-1 flex-col p-6 overflow-y-auto hidden">
+                <div class="max-w-3xl mx-auto w-full space-y-6">
+                    <div>
+                        <h2 class="text-2xl font-bold tracking-tight text-slate-100">Backup & Local Preferences</h2>
+                        <p class="text-sm text-slate-400">Manage local phone data and export your bookmarks</p>
+                    </div>
+
+                    <!-- JSON Backup & Restore Box -->
+                    <div class="bg-slate-800/60 border border-slate-700/60 rounded-squircle p-6 space-y-4 shadow-xl">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-database"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-200">Local JSON Storage Backup</h3>
+                                <p class="text-xs text-slate-400">Export all series, chapters, search history, and settings into a single file.</p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <button onclick="exportJsonBackup()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-semibold shadow-md transition-all flex items-center gap-2">
+                                <i class="fa-solid fa-download"></i> Export Backup (.json)
+                            </button>
+                            
+                            <label class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-2xl text-xs font-semibold cursor-pointer transition-all flex items-center gap-2">
+                                <i class="fa-solid fa-upload"></i> Restore Backup
+                                <input type="file" id="importJsonInput" accept=".json" onchange="importJsonBackup(event)" class="hidden">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Proxy Settings Box -->
+                    <div class="bg-slate-800/60 border border-slate-700/60 rounded-squircle p-6 space-y-4 shadow-xl">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-shield-halved"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-200">Iframe & Proxy Settings</h3>
+                                <p class="text-xs text-slate-400">Bypass site headers (`X-Frame-Options`) to load external manga pages inside Shinigami M3.</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 pt-2">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-300 mb-1">CORS Proxy Engine URL</label>
+                                <input id="corsProxyUrlInput" type="text" value="https://api.allorigins.win/raw?url=" class="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-2xl text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- MODAL: ADD / EDIT SERIES BOOKMARK -->
+    <div id="seriesModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-squircle max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-lg text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-bookmark text-purple-400"></i> Bookmark Manga Series
+                </h3>
+                <button onclick="closeModal('seriesModal')" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form onsubmit="saveSeriesBookmark(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Manga Title</label>
+                    <input id="modalSeriesTitle" type="text" required placeholder="e.g. One Piece" class="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-2xl text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Homepage URL</label>
+                    <input id="modalSeriesUrl" type="url" required placeholder="https://mangapark.net/title/..." class="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-2xl text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Cover Image URL (Optional)</label>
+                    <input id="modalSeriesCover" type="url" placeholder="https://.../cover.jpg" class="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-2xl text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-semibold mb-1">Custom Tags / Category</label>
+                    <input id="modalSeriesTags" type="text" placeholder="Shonen, Action, Favorite" class="w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-2xl text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="closeModal('seriesModal')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-semibold">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-semibold shadow-md">Save Bookmark</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APP LOGIC -->
+    <script>
+        // App State Store
+        const state = {
+            currentUrl: 'https://google.com/search?q=one+piece+manga',
+            proxyMode: 'corsProxy',
+            corsProxyPrefix: 'https://api.allorigins.win/raw?url=',
+            bookmarks: JSON.parse(localStorage.getItem('shinigami_series') || '[]'),
+            chapters: JSON.parse(localStorage.getItem('shinigami_chapters') || '[]')
+        };
+
+        // Initialize App
+        window.onload = function() {
+            updateBadges();
+            renderLibrary();
+            renderChapters();
+            navigateTo(state.currentUrl);
+        };
+
+        // Navigation Tab Switcher
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-purple-600', 'dark:text-purple-400', 'bg-purple-50', 'dark:bg-purple-950/50', 'border', 'border-purple-200/50', 'dark:border-purple-800/50');
+                btn.classList.add('text-slate-600', 'dark:text-slate-400');
+            });
+
+            const activeBtn = document.getElementById(`nav-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('text-purple-600', 'dark:text-purple-400', 'bg-purple-50', 'dark:bg-purple-950/50', 'border', 'border-purple-200/50', 'dark:border-purple-800/50');
+            }
+        }
+
+        // Live Embedded Browser Functions
+        function navigateTo(url) {
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+            state.currentUrl = url;
+            document.getElementById('urlInput').value = url;
+            
+            const iframe = document.getElementById('browserIframe');
+            const loader = document.getElementById('browser-loader');
+            loader.classList.remove('hidden');
+
+            if (state.proxyMode === 'corsProxy') {
+                iframe.src = state.corsProxyPrefix + encodeURIComponent(url);
+            } else {
+                iframe.src = url;
+            }
+        }
+
+        function handleUrlSubmit(e) {
+            e.preventDefault();
+            let query = document.getElementById('urlInput').value.trim();
+            if (!query) return;
+
+            if (query.includes('.') && !query.includes(' ')) {
+                navigateTo(query);
+            } else {
+                navigateTo(`https://google.com/search?q=${encodeURIComponent(query)}`);
+            }
+        }
+
+        function browserReload() {
+            navigateTo(state.currentUrl);
+        }
+
+        function browserBack() {
+            try { document.getElementById('browserIframe').contentWindow.history.back(); } catch(e) {}
+        }
+
+        function browserForward() {
+            try { document.getElementById('browserIframe').contentWindow.history.forward(); } catch(e) {}
+        }
+
+        function openExternalBrowser() {
+            window.open(state.currentUrl, '_blank');
+        }
+
+        function updateProxyMode() {
+            state.proxyMode = document.getElementById('proxyMode').value;
+            navigateTo(state.currentUrl);
+        }
+
+        function onIframeLoaded() {
+            document.getElementById('browser-loader').classList.add('hidden');
+        }
+
+        // Floating Action Widget Toggle
+        function toggleWidgetMenu() {
+            const menu = document.getElementById('widget-menu');
+            if (menu.classList.contains('hidden')) {
+                menu.classList.remove('hidden');
+                setTimeout(() => {
+                    menu.classList.remove('scale-95', 'opacity-0');
+                    menu.classList.add('scale-100', 'opacity-100');
+                }, 10);
+            } else {
+                menu.classList.remove('scale-100', 'opacity-100');
+                menu.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => menu.classList.add('hidden'), 300);
+            }
+        }
+
+        // Bookmark Prompt Modals
+        function promptBookmarkSeries() {
+            document.getElementById('modalSeriesTitle').value = document.title || 'Manga Title';
+            document.getElementById('modalSeriesUrl').value = state.currentUrl;
+            document.getElementById('modalSeriesCover').value = '';
+            document.getElementById('modalSeriesTags').value = 'Manga, Favorite';
+            document.getElementById('seriesModal').classList.remove('hidden');
+            toggleWidgetMenu();
+        }
+
+        function promptBookmarkChapter() {
+            const seriesTitle = prompt('Enter Series Name for this chapter:', 'One Piece');
+            if (!seriesTitle) return;
+
+            const chapterTitle = prompt('Enter Chapter Name/Number:', 'Chapter 1080');
+            if (!chapterTitle) return;
+
+            const newChapter = {
+                id: Date.now().toString(),
+                seriesTitle: seriesTitle,
+                chapterTitle: chapterTitle,
+                url: state.currentUrl,
+                dateAdded: new Date().toLocaleDateString()
+            };
+
+            state.chapters.unshift(newChapter);
+            saveData();
+            renderChapters();
+            alert(`Saved ${chapterTitle} to your Shinigami M3 Library!`);
+            toggleWidgetMenu();
+        }
+
+        function saveSeriesBookmark(e) {
+            e.preventDefault();
+            const title = document.getElementById('modalSeriesTitle').value;
+            const url = document.getElementById('modalSeriesUrl').value;
+            const cover = document.getElementById('modalSeriesCover').value || 'https://placehold.co/400x600/8b5cf6/ffffff?text=' + encodeURIComponent(title);
+            const tags = document.getElementById('modalSeriesTags').value.split(',').map(t => t.trim());
+
+            const newSeries = {
+                id: Date.now().toString(),
+                title,
+                url,
+                cover,
+                tags,
+                dateAdded: new Date().toLocaleDateString()
+            };
+
+            state.bookmarks.unshift(newSeries);
+            saveData();
+            renderLibrary();
+            closeModal('seriesModal');
+            alert('Series bookmarked successfully!');
+        }
+
+        function renderLibrary() {
+            const grid = document.getElementById('seriesGrid');
+            const empty = document.getElementById('libraryEmptyState');
+            const filter = document.getElementById('librarySearchInput')?.value.toLowerCase() || '';
+
+            grid.innerHTML = '';
+            const filtered = state.bookmarks.filter(b => b.title.toLowerCase().includes(filter));
+
+            if (filtered.length === 0) {
+                empty.classList.remove('hidden');
+                return;
+            } else {
+                empty.classList.add('hidden');
+            }
+
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-slate-800/80 border border-slate-700/70 rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all flex flex-col group';
+                card.innerHTML = `
+                    <div class="relative aspect-[3/4] overflow-hidden bg-slate-900 cursor-pointer" onclick="openBookmark('${item.url}')">
+                        <img src="${item.cover}" onerror="this.src='https://placehold.co/400x600/8b5cf6/ffffff?text=${encodeURIComponent(item.title)}'" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent opacity-60"></div>
+                        <span class="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-slate-950/80 text-[10px] text-purple-300 font-bold border border-purple-500/30">Manga</span>
+                    </div>
+                    <div class="p-3 flex flex-col justify-between flex-1">
+                        <div>
+                            <h4 class="font-bold text-sm text-slate-100 truncate cursor-pointer hover:text-purple-400" onclick="openBookmark('${item.url}')">${item.title}</h4>
+                            <p class="text-[11px] text-slate-400 truncate mt-0.5">${item.url}</p>
+                        </div>
+                        <div class="flex items-center justify-between mt-3 pt-2 border-t border-slate-700/50 text-xs">
+                            <button onclick="openBookmark('${item.url}')" class="text-purple-400 hover:text-purple-300 font-semibold text-xs flex items-center gap-1">
+                                <i class="fa-solid fa-play text-[10px]"></i> Read
+                            </button>
+                            <button onclick="deleteBookmark('${item.id}')" class="text-slate-500 hover:text-rose-400 transition-colors">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function renderChapters() {
+            const body = document.getElementById('chapterTableBody');
+            body.innerHTML = '';
+
+            state.chapters.forEach(ch => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/50 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-semibold text-slate-200">${ch.seriesTitle}</td>
+                    <td class="py-3 px-4 text-purple-400 font-medium">${ch.chapterTitle}</td>
+                    <td class="py-3 px-4 text-xs text-slate-400">${ch.dateAdded}</td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="openBookmark('${ch.url}')" class="px-3 py-1 bg-purple-600/30 text-purple-300 hover:bg-purple-600 hover:text-white rounded-xl text-xs font-semibold mr-2 transition-all">
+                            Open
+                        </button>
+                        <button onclick="deleteChapter('${ch.id}')" class="text-slate-500 hover:text-rose-400 transition-colors">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        function openBookmark(url) {
+            switchTab('browser');
+            navigateTo(url);
+        }
+
+        function deleteBookmark(id) {
+            state.bookmarks = state.bookmarks.filter(b => b.id !== id);
+            saveData();
+            renderLibrary();
+        }
+
+        function deleteChapter(id) {
+            state.chapters = state.chapters.filter(c => c.id !== id);
+            saveData();
+            renderChapters();
+        }
+
+        function clearChapterHistory() {
+            if (confirm('Clear all recorded chapters?')) {
+                state.chapters = [];
+                saveData();
+                renderChapters();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('shinigami_series', JSON.stringify(state.bookmarks));
+            localStorage.setItem('shinigami_chapters', JSON.stringify(state.chapters));
+            updateBadges();
+        }
+
+        function updateBadges() {
+            document.getElementById('series-count-badge').innerText = state.bookmarks.length;
+            document.getElementById('chapter-count-badge').innerText = state.chapters.length;
+        }
+
+        // Backup & Restore
+        function exportJsonBackup() {
+            const backupData = {
+                version: "3.4",
+                bookmarks: state.bookmarks,
+                chapters: state.chapters,
+                exportDate: new Date().toISOString()
+            };
+            const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `shinigami_m3_backup_${Date.now()}.json`;
+            a.click();
+        }
+
+        function importJsonBackup(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    if (data.bookmarks) state.bookmarks = data.bookmarks;
+                    if (data.chapters) state.chapters = data.chapters;
+                    saveData();
+                    renderLibrary();
+                    renderChapters();
+                    alert('Backup restored successfully!');
+                } catch(err) {
+                    alert('Invalid backup JSON file.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        function extractPageImages() {
+            alert('Extracting images from current iframe context...');
+        }
+    </script>
+</body>
+</html>
